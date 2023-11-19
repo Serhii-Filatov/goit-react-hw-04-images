@@ -97,6 +97,10 @@ export class App extends Component {
     });
   };
 
+  delite() {
+    console.log('123');
+  }
+
   render() {
     const { images, isloading } = this.state;
 
