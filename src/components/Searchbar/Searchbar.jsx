@@ -1,4 +1,3 @@
-import React from 'react';
 import { StyledSearchbar } from './Styled';
 import { HiSearch } from 'react-icons/hi';
 

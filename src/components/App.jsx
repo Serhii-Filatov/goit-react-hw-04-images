@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { useState, useEffect } from 'react';
 
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -11,124 +11,107 @@ import { Button } from './Button/Button';
 import { Modal } from './Modal/Modal';
 import { PER_PAGE } from '../utils/searchService';
 
-export class App extends Component {
-  state = {
-    images: [],
-    isloading: false,
-    searchValue: '',
-    currentPage: 1,
-    loadMore: false,
-    isOpenModal: false,
-    modalData: null,
-  };
+export const App = () => {
+  const [imageArray, setImageArray] = useState([]);
+  const [isloading, setIsLoading] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loadMore, setLoadMore] = useState(false);
+  const [isOpenModal, setIsOpenModal] = useState(false);
+  const [modalData, setModalData] = useState(false);
 
-  componentDidUpdate(_, prevState) {
-    if (
-      prevState.currentPage !== this.state.currentPage ||
-      prevState.searchValue !== this.state.searchValue
-    ) {
-      this.getImages();
-    }
-  }
+  useEffect(() => {
+    async function fetchImages() {
+      try {
+        setIsLoading(true);
 
-  getImages = async () => {
-    try {
-      this.setState({ isloading: true });
-      const { searchValue, currentPage } = this.state;
-      const response = await searchService(searchValue, currentPage);
+        const response = await searchService(searchValue, currentPage);
+        const newImages = response.hits;
 
-      const newImages = response.hits.map(
-        ({ id, webformatURL, largeImageURL, tags }) => ({
-          id,
-          webformatURL,
-          largeImageURL,
-          tags,
-        })
-      );
-      this.setState(prevState => ({
-        images: [...(prevState.images || []), ...newImages],
-      }));
+        if (newImages.length === 0) {
+          setLoadMore(false);
+          toast.warning(
+            `Sorry, there are no images matching your search query. Please try again.`
+          );
+          return;
+        }
 
-      if (response.totalHits !== 0 && this.state.currentPage === 1) {
-        toast.success(`Hooray! We found ${response.totalHits} images!`);
+        setImageArray(prevImages => [...prevImages, ...newImages]);
+
+        if (response.totalHits !== 0 && currentPage === 1) {
+          toast.success(`Hooray! We found ${response.totalHits} images!`);
+        }
+
+        const totalPage = Math.ceil(response.totalHits / PER_PAGE);
+
+        if (totalPage > currentPage) {
+          setLoadMore(true);
+        } else if (totalPage === currentPage && response.totalHits) {
+          toast.error(`Sorry, but you've reached the end of search results.`);
+          setLoadMore(false);
+        }
+      } catch (error) {
+        toast.error(error.message);
+      } finally {
+        setIsLoading(false);
       }
-      const totalPage = Math.ceil(response.totalHits / PER_PAGE);
-
-      if (totalPage > currentPage) {
-        this.setState({ loadMore: true });
-      } else if (totalPage === currentPage && response.totalHits) {
-        toast.error("Sorry, but you've reached the end of search results.");
-        this.setState({ loadMore: false });
-      }
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      this.setState({ isloading: false });
     }
-  };
 
-  handleSearch = event => {
+    if (!searchValue) return;
+    fetchImages();
+  }, [searchValue, currentPage]);
+
+  const handleSearch = event => {
     event.preventDefault();
+
     const form = event.currentTarget;
     const query = form.search.value.trim().toLowerCase();
+
     if (query === '') {
-      toast.error('Sorry, there are no images matching your search query.');
+      toast.warning(`Sorry, the query can't be empty, enter some value.`);
       return;
+    } else if (query === searchValue) {
+      toast.error(`Please enter a new search.`);
+      return;
+    } else {
+      setSearchValue(query);
+      setCurrentPage(1);
+      setImageArray([]);
     }
-    this.setState({ searchValue: query, currentPage: 1, images: null });
-    form.reset();
   };
 
-  handleLoadMore = () => {
-    this.setState(prevState => ({ currentPage: prevState.currentPage + 1 }));
+  const handleLoadMore = () => {
+    setCurrentPage(prevState => prevState + 1);
   };
 
-  openModal = someDataToModal => {
-    this.setState({
-      isOpenModal: true,
-      modalData: someDataToModal,
-    });
+  const openModal = someDataToModal => {
+    setIsOpenModal(true);
+    setModalData(someDataToModal);
   };
 
-  closeModal = () => {
-    this.setState({
-      isOpenModal: false,
-      modalData: null,
-    });
+  const closeModal = () => {
+    setIsOpenModal(false);
+    setModalData(null);
   };
 
-  delite() {
-    console.log('123');
-  }
+  return (
+    <div className="container">
+      <Searchbar onSubmit={handleSearch} />
+      {isloading && <Loader />}
 
-  render() {
-    const { images, isloading } = this.state;
+      {imageArray.length > 0 && (
+        <ImageGallery images={imageArray} openModal={openModal} />
+      )}
 
-    return (
-      <div className="container">
-        <Searchbar onSubmit={this.handleSearch} />
+      {loadMore && <Button onClick={handleLoadMore} />}
 
-        {images && images.length > 0 && (
-          <ImageGallery images={images} openModal={this.openModal} />
-        )}
+      <ToastContainer
+        autoClose={5000}
+        position="top-right"
+        containerClassName="text-base"
+      />
 
-        {this.state.loadMore && <Button onClick={this.handleLoadMore} />}
-
-        {isloading && <Loader />}
-
-        <ToastContainer
-          autoClose={5000}
-          position="top-right"
-          containerClassName="text-base"
-        />
-
-        {this.state.modalData !== null && (
-          <Modal
-            closeModal={this.closeModal}
-            modalData={this.state.modalData}
-          />
-        )}
-      </div>
-    );
-  }
-}
+      {isOpenModal && <Modal closeModal={closeModal} modalData={modalData} />}
+    </div>
+  );
+};
